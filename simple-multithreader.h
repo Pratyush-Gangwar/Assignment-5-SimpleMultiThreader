@@ -45,4 +45,59 @@ int main(int argc, char **argv) {
 
 #define main user_main
 
+int min(int x, int y) {
+  return (x <= y ? x : y);
+}
+
+struct linear_args {
+  int low;
+  int high;
+  std::function<void(int)> lambda;
+};
+
+void* linear_thread_func(void* args) {
+  struct linear_args* lin_args = (struct linear_args*) args;
+
+  for(int i = lin_args->low; i < lin_args->high; i++) {
+    (lin_args->lambda)(i);
+  }
+
+  return NULL;
+}
+
+// parallel_for accepts a C++11 lambda function and runs the loop body (lambda) in  
+// parallel by using ‘numThreads’ number of Pthreads to be created by the simple-multithreader 
+void parallel_for(int low, int high, std::function<void(int)> &&lambda, int numThreads) {
+
+  pthread_t* tid_array = (pthread_t*) malloc(sizeof(pthread_t) * numThreads);
+  struct linear_args* linear_args_array = (struct linear_args*)  malloc( sizeof(struct linear_args) * numThreads );
+
+  int total_elements = high - low + 1;
+  int chunk_size = (total_elements)/numThreads;
+
+  for(int i = 0; i < numThreads; i++) {
+    linear_args_array[i].low = i * chunk_size;
+    linear_args_array[i].high = min( (i + 1) * chunk_size, total_elements );
+    linear_args_array[i].lambda = lambda;
+
+    pthread_create( &tid_array[i], NULL, linear_thread_func, (void*) &linear_args_array[i] );
+  }
+
+  for(int i = 0; i < numThreads; i++) {
+    pthread_join( tid_array[i], NULL );
+  }
+
+  free(tid_array);
+  free(linear_args_array);
+}
+
+
+ 
+// This version of parallel_for is for parallelizing two-dimensional for-loops, i.e., an outter for-i loop and  
+// an inner for-j loop. Loop properties, i.e. low, high are mentioned below for both outter  
+// and inner for-loops. The suffixes “1” and “2” represents outter and inner loop properties respectively.  
+void parallel_for(int low1, int high1,  int low2, int high2, 
+         std::function<void(int, int)>  &&lambda, int numThreads) {
+
+         }
 
