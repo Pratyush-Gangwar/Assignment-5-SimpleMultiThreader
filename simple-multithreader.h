@@ -158,9 +158,9 @@ void parallel_for(int low, int high, std::function<void(int)> &&lambda, int numT
     }
   }
 
-  // we must cover all the elements
+  // Main Thread also executes something
   linear_args_array[numThreads - 1].low = (numThreads - 1) * chunk_size;
-  linear_args_array[numThreads - 1].high = total_elements;
+  linear_args_array[numThreads - 1].high = total_elements; // we must cover all the elements
   linear_args_array[numThreads - 1].lambda = lambda;
   linear_thread_func( (void*) &linear_args_array[numThreads - 1] );
 
@@ -221,10 +221,12 @@ void parallel_for(int low1, int high1,  int low2, int high2, std::function<void(
   // printf("low1: %d high1: %d low2: %d high2: %d\n", low1, high1, low2, high2);
   // printf("cols: %d start: %d end: %d total: %d sz: %d\n", num_cols, linear_start_idx, linear_end_idx, total_elements, chunk_size);
 
-  for(int i = 0; i < numThreads; i++) {
+  for(int i = 0; i < numThreads - 1; i++) {
 
     matrix_args_array[i].linear_low = i * chunk_size;
-    matrix_args_array[i].linear_high = ( i == numThreads - 1 ? total_elements : (i + 1) * chunk_size);
+
+    // 'internal' threads (i.e, all threads except the last one) will never go beyond the array size
+    matrix_args_array[i].linear_high = (i + 1) * chunk_size;
     matrix_args_array[i].cols = num_cols;
     matrix_args_array[i].lambda = lambda;
 
@@ -237,8 +239,15 @@ void parallel_for(int low1, int high1,  int low2, int high2, std::function<void(
     }
   }
 
+  // Main Thread also executes something
+  matrix_args_array[numThreads - 1].linear_low = (numThreads - 1) * chunk_size;
+  matrix_args_array[numThreads - 1].linear_high = total_elements;  // we must cover all the elements
+  matrix_args_array[numThreads - 1].lambda = lambda;
+  matrix_args_array[numThreads - 1].cols = num_cols;
+  matrix_thread_func( (void*) &matrix_args_array[numThreads - 1] );
+
   // wait for threads
-  for(int i = 0; i < numThreads; i++) {
+  for(int i = 0; i < numThreads - 1; i++) {
     if (pthread_join( tid_array[i], NULL ) != 0) {
       perror("pthread_join error");
       exit(1);
