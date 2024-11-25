@@ -67,6 +67,7 @@ struct matrix_args {
 void* linear_thread_func(void* args) {
   struct linear_args* lin_args = (struct linear_args*) args;
 
+  // note, high is excluded
   for(int i = lin_args->low; i < lin_args->high; i++) {
     (lin_args->lambda)(i);
   }
@@ -77,7 +78,10 @@ void* linear_thread_func(void* args) {
 void* matrix_thread_func(void* args) {
   struct matrix_args* matrix_args = (struct matrix_args*) args;
 
+  // note, high is excluded
   for(int i = matrix_args->linear_low; i < matrix_args->linear_high; i++) {
+
+    // obtain the (row, col) from the linear index
     int row = i / matrix_args->cols;
     int col = i % matrix_args->cols;
 
@@ -93,14 +97,24 @@ void* matrix_thread_func(void* args) {
 // parallel by using ‘numThreads’ number of Pthreads to be created by the simple-multithreader 
 void parallel_for(int low, int high, std::function<void(int)> &&lambda, int numThreads) {
 
+  // allocate array to store thread objects
   pthread_t* tid_array = (pthread_t*) malloc(sizeof(pthread_t) * numThreads);
+  if (tid_array == NULL) {
+    perror("Error while allocating pthread_t array");
+    exit(1);
+  }
+
+  // allocate array to store linear arguments
   struct linear_args* linear_args_array = (struct linear_args*)  malloc( sizeof(struct linear_args) * numThreads );
+  if (linear_args_array == NULL) {
+    perror("Error while allocating linear_args array");
+    exit(1);
+  }
 
   // for(int i = low; i < high; i++)
   // (high - 1) - low + 1
   int total_elements = high - low;
   int chunk_size = (total_elements)/numThreads;
-
 
   // ~~~ Proof that high never goes out of bounds ~~~
   // note, chunk_size = floor( total_elements/numThreads )
@@ -126,32 +140,61 @@ void parallel_for(int low, int high, std::function<void(int)> &&lambda, int numT
 
   for(int i = 0; i < numThreads; i++) {
     linear_args_array[i].low = i * chunk_size;
+
+    // make sure that you don't go beyond the array
     linear_args_array[i].high = ( i == numThreads - 1 ? total_elements : (i + 1) * chunk_size);
     linear_args_array[i].lambda = lambda;
 
     // printf("thread %d: %d %d\n", i, linear_args_array[i].low, linear_args_array[i].high);
 
-    pthread_create( &tid_array[i], NULL, linear_thread_func, (void*) &linear_args_array[i] );
+    // create the thread
+    if ( pthread_create( &tid_array[i], NULL, linear_thread_func, (void*) &linear_args_array[i] ) != 0 ) {
+      perror("pthread_create error");
+      exit(1);
+    }
   }
 
+  // wait for the threads
   for(int i = 0; i < numThreads; i++) {
-    pthread_join( tid_array[i], NULL );
+    if ( pthread_join( tid_array[i], NULL ) != 0 ) {
+      perror("pthread_join error");
+      exit(1);
+    }
   }
 
+  // clean up 
   free(tid_array);
   free(linear_args_array);
 }
  
-// This version of parallel_for is for parallelizing two-dimensional for-loops, i.e., an outter for-i loop and  
-// an inner for-j loop. Loop properties, i.e. low, high are mentioned below for both outter  
+// This version of parallel_for is for parallelizing two-dimensional for-loops, i.e., an outer for-i loop and  
+// an inner for-j loop. Loop properties, i.e. low, high are mentioned below for both outer  
 // and inner for-loops. The suffixes “1” and “2” represents outter and inner loop properties respectively.  
+
+// note (row, col) in 2D array corresponds to row * num_cols + col in 1D array
+// linear_idx in 1D has row = linear_idx/num_cols and col = linear_idx % num_cols 
+
+// it's hard to deal with 2D coordinates of (row, col)
+// so, we convert each (row, col) into a linear index and then store that in the matrix_args struct
+// in matrix_thread_func(), we convert the linear index back into 2D (row, col)
+
 void parallel_for(int low1, int high1,  int low2, int high2, std::function<void(int, int)>  &&lambda, int numThreads) {
 
-  // note (row, col) in 2D array corresponds to row * num_cols + col in 1D array
-  // linear_idx in 1D has row = linear_idx/num_cols and col = linear_idx % num_cols 
 
+
+  // allocate array to store thread objects
   pthread_t* tid_array = (pthread_t*) malloc(sizeof(pthread_t) * numThreads);
+  if (tid_array == NULL) {
+    perror("Error while allocating pthread_t array");
+    exit(1);
+  }
+
+  // allocate array to store linear arguments
   struct matrix_args* matrix_args_array = (struct matrix_args*)  malloc( sizeof(struct matrix_args) * numThreads );
+  if (matrix_args_array == NULL) {
+    perror("Error while allocating matrix_args array");
+    exit(1);
+  }
 
   // for(int j = low2; j < high2; j++)
   // (high2 - 1) - low2 + 1
@@ -177,13 +220,22 @@ void parallel_for(int low1, int high1,  int low2, int high2, std::function<void(
 
     // printf("thread %d: %d %d\n", i, matrix_args_array[i].linear_low ,  matrix_args_array[i].linear_high );
 
-    pthread_create( &tid_array[i], NULL, matrix_thread_func, (void*) &matrix_args_array[i] );
+    // create threads
+    if (pthread_create( &tid_array[i], NULL, matrix_thread_func, (void*) &matrix_args_array[i] ) != 0) {
+      perror("pthread_create error");
+      exit(1);
+    }
   }
 
+  // wait for threads
   for(int i = 0; i < numThreads; i++) {
-    pthread_join( tid_array[i], NULL );
+    if (pthread_join( tid_array[i], NULL ) != 0) {
+      perror("pthread_join error");
+      exit(1);
+    }
   }
 
+  // clean up
   free(tid_array);
   free(matrix_args_array);
 }
