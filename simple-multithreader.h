@@ -176,7 +176,7 @@ void parallel_for(int low, int high, std::function<void(int)> &&lambda, int numT
 
   // Main Thread also executes something
   linear_args_array[numThreads - 1].low = (numThreads - 1) * chunk_size;
-  linear_args_array[numThreads - 1].high = total_elements; // we must cover all the elements
+  linear_args_array[numThreads - 1].high = high; // we must cover all the elements
   linear_args_array[numThreads - 1].lambda = lambda;
   linear_thread_func( (void*) &linear_args_array[numThreads - 1] );
 
@@ -232,12 +232,12 @@ void parallel_for(int low1, int high1,  int low2, int high2, std::function<void(
   // (high2 - 1) - low2 + 1
   int num_cols = high2 - low2;
 
-  // start at (low1, low2) and end at (high1 - 1, high2 - 1) (included)
+  // start at (low1, low2) and end at one beyond (high1 - 1, high2 - 1) (excluded)
   int linear_start_idx = low1 * num_cols + low2;
-  int linear_end_idx = (high1 - 1) * num_cols + (high2 - 1);
+  int linear_end_idx = (high1 - 1) * num_cols + (high2 - 1) + 1;
 
-  // (end_idx) - start_idx + 1
-  int total_elements = linear_end_idx - linear_start_idx + 1;
+  // (end_idx - 1) - start_idx + 1
+  int total_elements = linear_end_idx - linear_start_idx;
   int chunk_size = (total_elements)/numThreads;
 
   // printf("low1: %d high1: %d low2: %d high2: %d\n", low1, high1, low2, high2);
@@ -263,7 +263,7 @@ void parallel_for(int low1, int high1,  int low2, int high2, std::function<void(
 
   // Main Thread also executes something
   matrix_args_array[numThreads - 1].linear_low = (numThreads - 1) * chunk_size;
-  matrix_args_array[numThreads - 1].linear_high = total_elements;  // we must cover all the elements
+  matrix_args_array[numThreads - 1].linear_high = linear_end_idx;  // we must cover all the elements
   matrix_args_array[numThreads - 1].lambda = lambda;
   matrix_args_array[numThreads - 1].cols = num_cols;
   matrix_thread_func( (void*) &matrix_args_array[numThreads - 1] );
