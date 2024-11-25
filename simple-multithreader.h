@@ -138,11 +138,15 @@ void parallel_for(int low, int high, std::function<void(int)> &&lambda, int numT
   // so the high value for the last thread is ( (num_threads - 1) + 1 ) * chunk_size < total_elements. so, elements are definitely missed.
   // therefore, we need the last thread to cover some extra elements
 
-  for(int i = 0; i < numThreads; i++) {
+
+  // make numThreads - 1 threads
+  // the main thread is separate from the these numThreads - 1 threads
+  // in total, we'll have numThreads threads
+  for(int i = 0; i < numThreads - 1; i++) {
     linear_args_array[i].low = i * chunk_size;
 
-    // make sure that you don't go beyond the array
-    linear_args_array[i].high = ( i == numThreads - 1 ? total_elements : (i + 1) * chunk_size);
+    // 'internal' threads (i.e, all threads except the last one) will never go beyond the array size
+    linear_args_array[i].high = (i + 1) * chunk_size;
     linear_args_array[i].lambda = lambda;
 
     // printf("thread %d: %d %d\n", i, linear_args_array[i].low, linear_args_array[i].high);
@@ -154,8 +158,14 @@ void parallel_for(int low, int high, std::function<void(int)> &&lambda, int numT
     }
   }
 
+  // we must cover all the elements
+  linear_args_array[numThreads - 1].low = (numThreads - 1) * chunk_size;
+  linear_args_array[numThreads - 1].high = total_elements;
+  linear_args_array[numThreads - 1].lambda = lambda;
+  linear_thread_func( (void*) &linear_args_array[numThreads - 1] );
+
   // wait for the threads
-  for(int i = 0; i < numThreads; i++) {
+  for(int i = 0; i < numThreads - 1; i++) {
     if ( pthread_join( tid_array[i], NULL ) != 0 ) {
       perror("pthread_join error");
       exit(1);
