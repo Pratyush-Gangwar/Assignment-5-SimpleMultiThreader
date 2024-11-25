@@ -3,6 +3,10 @@
 #include <functional>
 #include <stdlib.h>
 #include <cstring>
+#include <time.h>
+
+#define NANOSECONDS_PER_SECOND 1000000000
+#define NANOSECONDS_PER_MILLSECOND 1000000
 
 int user_main(int argc, char **argv);
 
@@ -47,6 +51,13 @@ int main(int argc, char **argv) {
 
 int min(int x, int y) {
   return (x <= y ? x : y);
+}
+
+long long get_duration(struct timespec start, struct timespec end) {
+  long long total_start_nano = start.tv_sec * NANOSECONDS_PER_SECOND + start.tv_nsec;
+  long long total_end_nano = end.tv_sec * NANOSECONDS_PER_SECOND + end.tv_nsec;
+
+  return (total_end_nano - total_start_nano);
 }
 
 struct linear_args {
@@ -96,6 +107,11 @@ void* matrix_thread_func(void* args) {
 // parallel_for accepts a C++11 lambda function and runs the loop body (lambda) in  
 // parallel by using ‘numThreads’ number of Pthreads to be created by the simple-multithreader 
 void parallel_for(int low, int high, std::function<void(int)> &&lambda, int numThreads) {
+
+  // timing
+  struct timespec start;
+  struct timespec end;
+  clock_gettime(CLOCK_REALTIME, &start);
 
   // allocate array to store thread objects
   pthread_t* tid_array = (pthread_t*) malloc(sizeof(pthread_t) * numThreads);
@@ -175,6 +191,10 @@ void parallel_for(int low, int high, std::function<void(int)> &&lambda, int numT
   // clean up 
   free(tid_array);
   free(linear_args_array);
+
+  // time calculation
+  clock_gettime(CLOCK_REALTIME, &end);
+  printf("Time taken by parallel_for(low, high) = %lld ns = %lld ms\n", get_duration(start, end), get_duration(start, end)/NANOSECONDS_PER_MILLSECOND );
 }
  
 // This version of parallel_for is for parallelizing two-dimensional for-loops, i.e., an outer for-i loop and  
@@ -190,7 +210,9 @@ void parallel_for(int low, int high, std::function<void(int)> &&lambda, int numT
 
 void parallel_for(int low1, int high1,  int low2, int high2, std::function<void(int, int)>  &&lambda, int numThreads) {
 
-
+  struct timespec start;
+  struct timespec end;
+  clock_gettime(CLOCK_REALTIME, &start);
 
   // allocate array to store thread objects
   pthread_t* tid_array = (pthread_t*) malloc(sizeof(pthread_t) * numThreads);
@@ -257,5 +279,8 @@ void parallel_for(int low1, int high1,  int low2, int high2, std::function<void(
   // clean up
   free(tid_array);
   free(matrix_args_array);
-}
 
+  // time calculation
+  clock_gettime(CLOCK_REALTIME, &end);
+  printf("Time taken by parallel_for(low1, high1, low2, high2) = %lld ns = %lld ms\n", get_duration(start, end), get_duration(start, end)/NANOSECONDS_PER_MILLSECOND );
+}
